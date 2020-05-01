@@ -1,0 +1,25 @@
+{
+  "name": "tezos-starter-kit",
+  "version": "1.0.0",
+  "description": "Truffle tests for TZIP7 implementation built on Matej Sima test suite (matej.sima@stove-labs.com)",
+  "dependencies": {},
+  "devDependencies": {
+    "@taquito/signer": "^6.2.0-beta.0",
+    "@taquito/taquito": "^6.1.1-beta.0",
+    "lodash": "^4.17.15",
+    "promise-retry": "^1.1.1",
+    "truffle": "^5.3.0-tezos.2"
+  },
+  "scripts": {
+    "test": "truffle test",
+    "compile": "truffle compile",
+    "migrate": "truffle migrate",
+    "clean": "rm -rf ./build",
+    "wait-for-sandbox": "node ./scripts/sandbox/waitForNetwork.js",
+    "start-sandbox": "./scripts/sandbox/start_sandbox.sh",
+    "kill-sandbox": "./scripts/sandbox/kill_sandbox.sh",
+    "restart-sandbox": "./scripts/sandbox/restart_sandbox.sh"
+  },
+  "author": "Claude Barde",
+  "license": "MIT"
+}
