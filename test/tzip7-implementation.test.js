@@ -56,7 +56,7 @@ contract("tzip7 contract", (accounts) => {
       failwith = error.message;
     }
 
-    assert.equal(failwith, "Source balance is too low");
+    assert.equal(failwith, "NotEnoughBalance");
   });
 
   it("should transfer 2000 tokens from Alice to Bob", async () => {
@@ -81,7 +81,7 @@ contract("tzip7 contract", (accounts) => {
       aliceAccount.balance.toNumber(),
       aliceInitialAccount.balance.toNumber() - tokensToTransfer
     );
-    assert.equal(bobAccount.balance.toNumber(), 2000);
+    assert.equal(bobAccount.balance.toNumber(), tokensToTransfer);
   });
 
   it("should prevent Bob from spending Alice's tokens", async () => {
@@ -98,7 +98,7 @@ contract("tzip7 contract", (accounts) => {
       failwith = error.message;
     }
 
-    assert.equal(failwith, "Sender not allowed to spend tokens from source");
+    assert.equal(failwith, "NotEnoughAllowance");
   });
 
   it("Bob should now be able to transfer tokens back to Alice", async () => {
@@ -146,6 +146,22 @@ contract("tzip7 contract", (accounts) => {
     assert.equal(alicesAllowanceForBob, tokensToBeApproved);
   });
 
+  it("should prevent unsafe allowance change (attack vector)", async () => {
+    const tokensToBeApproved = 1000;
+    const err = "";
+
+    try {
+      const op = await tzip7_instance.methods
+        .approve(bob.pkh, tokensToBeApproved)
+        .send();
+      await op.confirmation();
+    } catch (err) {
+      error = err.message;
+    }
+
+    assert.equal(error, "UnsafeAllowanceChange");
+  });
+
   it("should prevent Bob from spending more than his allowance", async () => {
     let error = "";
     // fetches Bob's allowance
@@ -166,7 +182,7 @@ contract("tzip7 contract", (accounts) => {
       error = err.message;
     }
 
-    assert.equal(error, "Sender not allowed to spend tokens from source");
+    assert.equal(error, "NotEnoughAllowance");
   });
 
   it("should reduce Bob's allowance and Alice's balance after Bob spends 1000 tokens on behalf of Alice", async () => {
