@@ -244,13 +244,13 @@ let getAllowance = (params: allowance_params, s: storage): list(operation) => {
 //  None
 // Postconditions:
 //  The state is unchanged
-let getBalance = (p: balance_params, s : storage): list(operation) => {
-  let src: account = switch(Big_map.find_opt(p.owner, s.ledger)){
+let getBalance = (params: balance_params, s : storage): list(operation) => {
+  let src: account = switch(Big_map.find_opt(params.owner, s.ledger)){
     | None => failwith ("NoAccount"): account
     | Some (acc) => acc
   };
   // returns transaction with balance
-  [Tezos.transaction(src.balance, 0tz, p.callback)]: list(operation);
+  [Tezos.transaction(src.balance, 0tz, params.callback)]: list(operation);
 }
 
 // View function that forwards the totalSupply to a contract
