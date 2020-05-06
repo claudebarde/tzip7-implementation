@@ -1,4 +1,5 @@
 const tzip_7_implementation = artifacts.require("Tzip7");
+const testContract = artifacts.require("TestContract");
 const { Tezos } = require("@taquito/taquito");
 const { InMemorySigner, importKey } = require("@taquito/signer");
 const { alice, bob } = require("../scripts/sandbox/accounts");
@@ -10,7 +11,9 @@ const signerFactory = async (pk) => {
 
 contract("tzip7 contract", (accounts) => {
   let storage;
+  let tzip7_adddress;
   let tzip7_instance;
+  let testContractInstance;
 
   before(async () => {
     tzip7_instance = await tzip_7_implementation.deployed();
@@ -22,6 +25,7 @@ contract("tzip7 contract", (accounts) => {
      * Display the current contract address for debugging purposes
      */
     console.log("Contract deployed at:", tzip7_instance.address);
+    tzip7_adddress = tzip7_instance.address;
     tzip7_instance = await Tezos.contract.at(tzip7_instance.address);
     storage = await tzip7_instance.storage();
   });
@@ -245,5 +249,46 @@ contract("tzip7 contract", (accounts) => {
     const aliceAccount = await storage.ledger.get(alice.pkh);
 
     assert.isUndefined(await aliceAccount.allowances.get(bob.pkh));
+  });
+
+  it("should store total supply in test contract", async () => {
+    testContractInstance = await testContract.deployed();
+    //console.log("Test contract deployed at", testContractInstance.address);
+
+    await testContractInstance.getTotalSupply(tzip7_adddress);
+
+    const testStorage = await testContractInstance.storage();
+
+    assert.isAbove(testStorage.toNumber(), 0);
+  });
+
+  it("should store Alice's balance in test contract", async () => {
+    const aliceAccount = await storage.ledger.get(alice.pkh);
+
+    await testContractInstance.getBalance(tzip7_adddress, alice.pkh);
+
+    const testStorage = await testContractInstance.storage();
+
+    assert.equal(testStorage, aliceAccount.balance.toNumber());
+  });
+
+  it("should store Bob's allowance for Alice's tokens in test contract", async () => {
+    // first let's reallow Bob to spend 2000 of Alice's tokens
+    const tokensToBeApproved = 2000;
+    const op = await tzip7_instance.methods
+      .approve(bob.pkh, tokensToBeApproved)
+      .send();
+    await op.confirmation();
+
+    // now let's check how many tokens are allowed from the test contract
+    const aliceAccount = await storage.ledger.get(alice.pkh);
+    const bobAllowance = await aliceAccount.allowances.get(bob.pkh);
+
+    await testContractInstance.getAllowance(bob.pkh, alice.pkh, tzip7_adddress);
+
+    const testStorage = await testContractInstance.storage();
+
+    assert.equal(bobAllowance.toNumber(), tokensToBeApproved);
+    assert.equal(testStorage, bobAllowance.toNumber());
   });
 });

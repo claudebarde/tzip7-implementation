@@ -6,15 +6,18 @@ type account = {
   allowances: map(address, amountNat)
 };
 
+type balance_params = { callback: contract (nat), owner: address };
+type allowance_params = { owner: address, spender: address, callback: contract (nat)}
+
 type action =
   | Transfer ((address, address, amountNat))
   | Mint (amountNat)
   | Burn (amountNat)
   | Approve ((address, amountNat))
   | RemoveApproval (address)
-  | GetAllowance ((address, address, contract(amountNat)))
-  | GetBalance ((address, contract(amountNat)))
-  | GetTotalSupply ((unit, contract(amountNat)));
+  | GetAllowance (allowance_params)
+  | GetBalance (balance_params)
+  | GetTotalSupply (contract(amountNat));
 
 type metadata = {
   token_id : nat,
@@ -221,19 +224,19 @@ let removeApproval = (spender: address, s: storage): storage => {
 //  None
 // Postconditions:
 //  The state is unchanged
-let getAllowance = (owner: address, spender: address, contract: contract(amountNat), s: storage): list(operation) => {
+let getAllowance = (params: allowance_params, s: storage): list(operation) => {
   // finds owner's account
-  let src: account = switch(Big_map.find_opt(owner, s.ledger)){
+  let src: account = switch(Big_map.find_opt(params.owner, s.ledger)){
     | None => failwith ("NoAccount"): account
     | Some (acc) => acc
   };
   // gets spender's allowance
-  let destAllowance: amountNat = switch(Map.find_opt(spender, src.allowances)){
+  let destAllowance: amountNat = switch(Map.find_opt(params.spender, src.allowances)){
     | None => failwith ("NoAccount"): amountNat
     | Some (allowance) => allowance
   };
   // returns transaction with allowance
-  [Tezos.transaction(destAllowance, 0tz, contract)]: list(operation);
+  [Tezos.transaction(destAllowance, 0tz, params.callback)]: list(operation);
 }
 
 // View function that forwards the balance of source to a contract
@@ -241,13 +244,13 @@ let getAllowance = (owner: address, spender: address, contract: contract(amountN
 //  None
 // Postconditions:
 //  The state is unchanged
-let getBalance = (accountFrom: address, contract: contract(amountNat), s : storage): list(operation) => {
-  let src: account = switch(Big_map.find_opt(accountFrom, s.ledger)){
+let getBalance = (p: balance_params, s : storage): list(operation) => {
+  let src: account = switch(Big_map.find_opt(p.owner, s.ledger)){
     | None => failwith ("NoAccount"): account
     | Some (acc) => acc
   };
   // returns transaction with balance
-  [Tezos.transaction(src.balance, 0tz, contract)]: list(operation);
+  [Tezos.transaction(src.balance, 0tz, p.callback)]: list(operation);
 }
 
 // View function that forwards the totalSupply to a contract
@@ -255,7 +258,7 @@ let getBalance = (accountFrom: address, contract: contract(amountNat), s : stora
 //  None
 // Postconditions:
 //  The state is unchanged
-let getTotalSupply = (contract: contract(amountNat), s: storage): list(operation) => {
+let getTotalSupply = (contract: contract (nat), s: storage): list(operation) => {
   // returns transaction with total supply
   // this doesn't compile => [Tezos.transaction(s.totalSupply, 0tz, contr)]: list(operation);
   [Tezos.transaction(s.totalSupply, 0tz, contract)];
@@ -270,9 +273,9 @@ let main = ((p, s): (action, storage)): (list(operation), storage) => {
       | Transfer (n) => ([]: list(operation), transfer(n[0], n[1], n[2] , s))
       | Approve (n) => ([]: list(operation), approve(n[0], n[1], s))
       | RemoveApproval (n) => ([]: list(operation), removeApproval(n, s))
-      | GetAllowance (n) => (getAllowance(n[0], n[1], n[2], s), s)
-      | GetBalance (n) => (getBalance(n[0], n[1], s), s)
-      | GetTotalSupply (n) => (getTotalSupply(n[1], s), s)
+      | GetAllowance (p) => (getAllowance(p, s), s)
+      | GetBalance (p) => (getBalance(p, s), s)
+      | GetTotalSupply (n) => (getTotalSupply(n, s), s)
       | Mint (n) => ([]: list(operation), mint(n, s))
       | Burn (n) => ([]: list(operation), burn(n, s))
     };

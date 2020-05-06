@@ -11,8 +11,8 @@
     "truffle": "^5.3.0-tezos.2"
   },
   "scripts": {
-    "test": "truffle test",
-    "compile": "truffle compile",
+    "test": "docker pull ligolang/ligo:next && truffle test",
+    "compile": "docker pull ligolang/ligo:next && truffle compile",
     "migrate": "truffle migrate",
     "clean": "rm -rf ./build",
     "wait-for-sandbox": "node ./scripts/sandbox/waitForNetwork.js",
