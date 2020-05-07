@@ -1,23 +1,24 @@
 // This is an implementation of the FA1.2 specification in ReasonLIGO
-type amountNat = nat;
-
 type account = {
-  balance: amountNat,
-  allowances: map(address, amountNat)
+  balance: nat,
+  allowances: map(address, nat)
 };
 
 type balance_params = { callback: contract (nat), owner: address };
 type allowance_params = { owner: address, spender: address, callback: contract (nat)}
 
 type action =
-  | Transfer ((address, address, amountNat))
-  | Mint (amountNat)
-  | Burn (amountNat)
-  | Approve ((address, amountNat))
+  | Transfer ((address, address, nat))
+  | Mint (nat)
+  | Burn (nat)
+  | SetBuyPrice (tez)
+  | SupplyBuyPool (nat)
+  | Buy (nat)
+  | Approve ((address, nat))
   | RemoveApproval (address)
   | GetAllowance (allowance_params)
   | GetBalance (balance_params)
-  | GetTotalSupply (contract(amountNat));
+  | GetTotalSupply (contract(nat));
 
 type metadata = {
   token_id : nat,
@@ -30,11 +31,13 @@ type metadata = {
 type storage = {
   owner: address,
   metadata: metadata,
-  totalSupply: amountNat,
+  buyPrice: tez,
+  tokenBuyPool: nat,
+  totalSupply: nat,
   ledger: big_map(address, account)
 };
 
-let isAllowed = (accountFrom: address, value: amountNat, s: storage): bool => {
+let isAllowed = (accountFrom: address, value: nat, s: storage): bool => {
   if (Tezos.sender != accountFrom) {
     // Checking if the sender is allowed to spend in name of accountFrom
     switch (Big_map.find_opt(accountFrom, s.ledger)){
@@ -51,14 +54,14 @@ let isAllowed = (accountFrom: address, value: amountNat, s: storage): bool => {
   }
 }
 
-// Transfer a specific amountNat of tokens from accountFrom address to a destination address
+// Transfer a specific nat of tokens from accountFrom address to a destination address
 // Preconditions:
 //  The sender address is the account owner or is allowed to spend x in the name of accountFrom
-//  The accountFrom account has a balance higher than the amountNat
+//  The accountFrom account has a balance higher than the nat
 // Postconditions:
-//  The balance of accountFrom is decreased by the amountNat
-//  The balance of destination is increased by the amountNat
-let transfer = (accountFrom: address, accountTo: address, value: amountNat, s: storage): storage => {
+//  The balance of accountFrom is decreased by the nat
+//  The balance of destination is increased by the nat
+let transfer = (accountFrom: address, accountTo: address, value: nat, s: storage): storage => {
   // If accountFrom = destination transfer is not necessary
   if(accountFrom == accountTo) {
     failwith ("SameOriginAndDestination"): storage;
@@ -84,12 +87,12 @@ let transfer = (accountFrom: address, accountTo: address, value: amountNat, s: s
         let dest: account = switch(Map.find_opt(accountTo, s.ledger)){
           | None => {
               balance: value,
-              allowances: Map.empty: map(address, amountNat)
+              allowances: Map.empty: map(address, nat)
             }
           | Some (acc) => {...acc, balance: acc.balance + value}
         };
 
-        // Decrease the allowance amountNat if necessary
+        // Decrease the allowance nat if necessary
         let new_allowances = switch(Map.find_opt(Tezos.sender, src_.allowances)){
           | None => src_.allowances
           | Some (dstAllowance) => 
@@ -112,8 +115,8 @@ let transfer = (accountFrom: address, accountTo: address, value: amountNat, s: s
 //  The sender is the owner of the contract
 // Postconditions:
 //  The minted tokens are added in the balance of the owner
-//  The totalSupply is increased by the amountNat of minted token
-let mint = (value: amountNat, s: storage): storage => {
+//  The totalSupply is increased by the nat of minted token
+let mint = (value: nat, s: storage): storage => {
   // If the sender is not the owner fail
   if(Tezos.sender != s.owner){
     failwith ("UnauthorizedAccess"): storage;
@@ -121,7 +124,7 @@ let mint = (value: amountNat, s: storage): storage => {
     let ownerAccount: account = switch(Map.find_opt(s.owner, s.ledger)){
       | None => {
           balance: value,
-          allowances: Map.empty: map(address, amountNat)
+          allowances: Map.empty: map(address, nat)
         }
       | Some (acc) => 
         // Updates the owner balance
@@ -138,14 +141,14 @@ let mint = (value: amountNat, s: storage): storage => {
 //  The owner have the required balance to burn
 // Postconditions:
 //  The burned tokens are subtracted from the balance of the owner
-//  The totalSupply is decreased by the amountNat of burned token 
-let burn = (value: amountNat, s : storage):  storage => {
+//  The totalSupply is decreased by the nat of burned token 
+let burn = (value: nat, s : storage):  storage => {
   // If the sender is not the owner fail
   if(Tezos.sender != s.owner){
     failwith("UnauthorizedAccess"):  storage;
   } else {
     let ownerAccount = switch(Big_map.find_opt(s.owner, s.ledger)){
-      | None => {balance: 0n, allowances: Map.empty: map(address, amountNat)}
+      | None => {balance: 0n, allowances: Map.empty: map(address, nat)}
       | Some (acc) => acc
     };
     // Check that the owner can burn that much
@@ -163,12 +166,12 @@ let burn = (value: amountNat, s : storage):  storage => {
   }
 }
 
-// Approve an amountNat to be spent by another address in the name of the sender
+// Approve an nat to be spent by another address in the name of the sender
 // Preconditions:
 //  The spender account is not the sender account
 // Postconditions:
 //  The allowance of spender in the name of sender is value
-let approve = (spender: address, value: amountNat, s : storage): storage => {
+let approve = (spender: address, value: nat, s : storage): storage => {
   // If sender is the spender approving is not necessary
   if(Tezos.sender == spender){
     failwith ("The account owner and the spender address cannot be the same!"): storage;
@@ -183,7 +186,7 @@ let approve = (spender: address, value: amountNat, s : storage): storage => {
       | Some (allowance) => {
         // attempt to change approval value from non-zero to non-zero 
         if(allowance > 0n && value > 0n) {
-          failwith ("UnsafeAllowanceChange"): map(address, amountNat)
+          failwith ("UnsafeAllowanceChange"): map(address, nat)
         } else {
           Map.update(spender, Some (value), src.allowances)
         }
@@ -218,8 +221,82 @@ let removeApproval = (spender: address, s: storage): storage => {
   }
 }
 
+// Set a buy price for the tokens from the contract's owner
+// Preconditions:
+// The function is called by the contracts's owner
+// Postconditions:
+// The buy price has been updated
+let setBuyPrice = (buyPrice: tez, s: storage): storage => {
+  if (Tezos.source != s.owner) {
+    failwith ("UnauthorizedOperation"): storage;
+  } else {
+    { ...s, buyPrice: buyPrice }
+  }
+}
 
-// View function that forwards the allowance amountNat of spender in the name of owner to a contract
+// Transfers tokens from owner's account to buy pool
+// Preconditions:
+// Owner has sufficient tokens to transfer
+// Postconditions:
+// Buy pool has been increased to the right amount of tokens
+let supplyBuyPool = (tokenAmount: nat, s: storage): storage => {
+  if (Tezos.source != s.owner) {
+    failwith ("UnauthorizedOperation"): storage;
+  } else {
+    // checks if owner has enough tokens to supply the buy pool
+    let ownerAccount = switch(Big_map.find_opt(Tezos.source, s.ledger)){
+      | None => failwith ("NoAccount"): account
+      | Some (acc) => if (acc.balance < tokenAmount) {
+          failwith ("InsufficientTokenBalance"): account;
+        } else {
+          // deducts token amount from owner's balance
+          {...acc, balance: abs(acc.balance - tokenAmount)}
+        }
+    };
+    // updates the storage with new value for buy pool and new owner's account
+    { ...s, 
+      ledger: Big_map.update(Tezos.source, Some (ownerAccount), s.ledger), 
+      tokenBuyPool: s.tokenBuyPool + tokenAmount }
+  }
+}
+
+// Users can buy tokens from the contract at buy price
+// Preconditions: 
+// buyPrice is superior to zero
+// Amount of tez is attached to the transaction
+// Amount of tez is equal to token amount * buy price
+// Buy pool has sufficient tokens to transfer
+// Postconditions:
+// Tokens have been transferred
+let buy = (tokenAmount: nat, s: storage): storage => {
+  // checks if amount is provided
+  if(Tezos.amount == 0tez){
+    failwith ("NoAmount"): storage;
+  } else {
+    if (s.tokenBuyPool < tokenAmount){
+      failwith ("InsufficientBuyPool"): storage;
+    } else {
+      // checks if amount is equal to token amount * buy price
+      if(Tezos.amount != tokenAmount * s.buyPrice){
+        failwith ("IncorrectAmount"): storage;
+      } else {
+        // deducts tokens from buy pool
+        let newBuyPool = abs(s.tokenBuyPool - tokenAmount);
+        // transfers tokens from buy pool to user's account
+        let userAccount = switch(Big_map.find_opt(Tezos.sender, s.ledger)){
+          | None => { balance: tokenAmount, allowances: Map.empty: map(address, nat) }
+          | Some (acc) => { ...acc, balance: acc.balance + tokenAmount }
+        };
+        // returns updated storage
+        { ...s, 
+          tokenBuyPool: newBuyPool, 
+          ledger: Big_map.update(Tezos.sender, Some (userAccount), s.ledger) }
+      }
+    }
+  }
+}
+
+// View function that forwards the allowance nat of spender in the name of owner to a contract
 // Preconditions:
 //  None
 // Postconditions:
@@ -231,8 +308,8 @@ let getAllowance = (params: allowance_params, s: storage): list(operation) => {
     | Some (acc) => acc
   };
   // gets spender's allowance
-  let destAllowance: amountNat = switch(Map.find_opt(params.spender, src.allowances)){
-    | None => failwith ("NoAccount"): amountNat
+  let destAllowance: nat = switch(Map.find_opt(params.spender, src.allowances)){
+    | None => failwith ("NoAccount"): nat
     | Some (allowance) => allowance
   };
   // returns transaction with allowance
@@ -265,19 +342,17 @@ let getTotalSupply = (contract: contract (nat), s: storage): list(operation) => 
 }
 
 let main = ((p, s): (action, storage)): (list(operation), storage) => {
-  // Reject any transaction that try to transfer token to this contract
-  if(Tezos.amount != 0tz){
-    failwith ("This contract do not accept token"): (list(operation), storage);
-  } else {
-    switch(p){
-      | Transfer (n) => ([]: list(operation), transfer(n[0], n[1], n[2] , s))
-      | Approve (n) => ([]: list(operation), approve(n[0], n[1], s))
-      | RemoveApproval (n) => ([]: list(operation), removeApproval(n, s))
-      | GetAllowance (p) => (getAllowance(p, s), s)
-      | GetBalance (p) => (getBalance(p, s), s)
-      | GetTotalSupply (n) => (getTotalSupply(n, s), s)
-      | Mint (n) => ([]: list(operation), mint(n, s))
-      | Burn (n) => ([]: list(operation), burn(n, s))
-    };
-  }
+  switch(p){
+    | Transfer (n) => ([]: list(operation), transfer(n[0], n[1], n[2] , s))
+    | Approve (n) => ([]: list(operation), approve(n[0], n[1], s))
+    | RemoveApproval (n) => ([]: list(operation), removeApproval(n, s))
+    | GetAllowance (p) => (getAllowance(p, s), s)
+    | GetBalance (p) => (getBalance(p, s), s)
+    | GetTotalSupply (n) => (getTotalSupply(n, s), s)
+    | Mint (n) => ([]: list(operation), mint(n, s))
+    | Burn (n) => ([]: list(operation), burn(n, s))
+    | SetBuyPrice (n) => ([]: list (operation), setBuyPrice(n, s))
+    | SupplyBuyPool (n) => ([]: list (operation), supplyBuyPool(n, s))
+    | Buy (n) => ([]: list (operation), buy(n, s))
+  };
 }

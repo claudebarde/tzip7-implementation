@@ -11,6 +11,8 @@ const initial_storage = {
     symbol: "TST",
     token_id: 7,
   },
+  buyPrice: 0,
+  tokenBuyPool: 0,
   totalSupply: 0,
   ledger: new MichelsonMap(),
 };

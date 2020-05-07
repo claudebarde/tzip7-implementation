@@ -291,4 +291,69 @@ contract("tzip7 contract", (accounts) => {
     assert.equal(bobAllowance.toNumber(), tokensToBeApproved);
     assert.equal(testStorage, bobAllowance.toNumber());
   });
+
+  it("should set a price of 0.8 tez to the token", async () => {
+    const priceToSet = 800000;
+    const op = await tzip7_instance.methods
+      .setBuyPrice(priceToSet)
+      .send({ mutez: true });
+    await op.confirmation();
+
+    storage = await tzip7_instance.storage();
+
+    assert.equal(storage.buyPrice.toNumber(), priceToSet);
+  });
+
+  it("should supply the buy pool with 2000 tokens", async () => {
+    const tokensToSupply = 2000;
+    const op = await tzip7_instance.methods
+      .supplyBuyPool(tokensToSupply)
+      .send();
+    await op.confirmation();
+
+    storage = await tzip7_instance.storage();
+
+    assert.equal(storage.tokenBuyPool, tokensToSupply);
+  });
+
+  it("should prevent Bob from buying more tokens than available", async () => {
+    // switches signer to Bob
+    await signerFactory(bob.sk);
+
+    let error;
+    const tokensToBuy = storage.tokenBuyPool + 1000;
+    const amount = (storage.buyPrice / 1000000) * tokensToBuy;
+    try {
+      await tzip7_instance.methods
+        .buy(tokensToBuy)
+        .send({ amount, mutez: true });
+    } catch (err) {
+      error = err.message;
+    }
+
+    assert.equal(error, "InsufficientBuyPool");
+  });
+
+  it("should allow Bob to buy 23 tokens from the pool", async () => {
+    const tokensToBuy = 23;
+    const amount = storage.buyPrice * tokensToBuy;
+    const bobAccount = await storage.ledger.get(bob.pkh);
+    const initialTokenPool = storage.tokenBuyPool;
+
+    const op = await tzip7_instance.methods
+      .buy(tokensToBuy)
+      .send({ amount, mutez: true });
+    await op.confirmation();
+
+    storage = await tzip7_instance.storage();
+    const bobNewAccount = await storage.ledger.get(bob.pkh);
+    const tzip7Balance = await Tezos.rpc.getBalance(tzip7_adddress);
+
+    assert.equal(storage.tokenBuyPool, initialTokenPool - tokensToBuy);
+    assert.equal(
+      bobAccount.balance.toNumber() + tokensToBuy,
+      bobNewAccount.balance.toNumber()
+    );
+    assert.equal(tzip7Balance.toNumber(), amount);
+  });
 });
