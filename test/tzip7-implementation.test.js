@@ -356,4 +356,52 @@ contract("tzip7 contract", (accounts) => {
     );
     assert.equal(tzip7Balance.toNumber(), amount);
   });
+
+  it("should pause the contract and forbid any operation", async () => {
+    // Bob tries to pause the contract
+    let error;
+
+    try {
+      await tzip7_instance.methods.pause([["unit"]]).send();
+    } catch (err) {
+      error = err.message;
+    }
+
+    assert.equal(error, "UnauthorizedOperation");
+
+    // switches signer to Alice
+    await signerFactory(alice.sk);
+
+    const op = await tzip7_instance.methods.pause([["unit"]]).send();
+    await op.confirmation();
+
+    storage = await tzip7_instance.storage();
+
+    assert.isTrue(storage.pause);
+
+    // switches signer to Bob
+    await signerFactory(bob.sk);
+
+    try {
+      await tzip7_instance.methods
+        .buy(200)
+        .send({ amount: 200 * 0.8, mutez: true });
+    } catch (err) {
+      error = err.message;
+    }
+
+    assert.equal(error, "ContractIsPaused");
+  });
+
+  it("should unpause the contract", async () => {
+    // switches signer to Alice
+    await signerFactory(alice.sk);
+
+    const op = await tzip7_instance.methods.pause([["unit"]]).send();
+    await op.confirmation();
+
+    storage = await tzip7_instance.storage();
+
+    assert.isFalse(storage.pause);
+  });
 });

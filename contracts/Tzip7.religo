@@ -18,7 +18,8 @@ type action =
   | RemoveApproval (address)
   | GetAllowance (allowance_params)
   | GetBalance (balance_params)
-  | GetTotalSupply (contract(nat));
+  | GetTotalSupply (contract(nat))
+  | Pause;
 
 type metadata = {
   token_id : nat,
@@ -34,7 +35,8 @@ type storage = {
   buyPrice: tez,
   tokenBuyPool: nat,
   totalSupply: nat,
-  ledger: big_map(address, account)
+  ledger: big_map(address, account),
+  pause: bool
 };
 
 let isAllowed = (accountFrom: address, value: nat, s: storage): bool => {
@@ -341,8 +343,24 @@ let getTotalSupply = (contract: contract (nat), s: storage): list(operation) => 
   [Tezos.transaction(s.totalSupply, 0tz, contract)];
 }
 
+// Pause the smart contract
+// Preconditions:
+// Only owner
+// Post conditions:
+// None
+let pause = (s: storage): storage => {
+  if(Tezos.source != s.owner){
+    failwith ("UnauthorizedOperation"): storage;
+  } else {
+    { ...s, pause: !s.pause }
+  }
+}
+
 let main = ((p, s): (action, storage)): (list(operation), storage) => {
-  switch(p){
+  if (s.pause && Tezos.source != s.owner) {
+    failwith ("ContractIsPaused"): (list (operation), storage);
+  } else {
+    switch(p){
     | Transfer (n) => ([]: list(operation), transfer(n[0], n[1], n[2] , s))
     | Approve (n) => ([]: list(operation), approve(n[0], n[1], s))
     | RemoveApproval (n) => ([]: list(operation), removeApproval(n, s))
@@ -354,5 +372,7 @@ let main = ((p, s): (action, storage)): (list(operation), storage) => {
     | SetBuyPrice (n) => ([]: list (operation), setBuyPrice(n, s))
     | SupplyBuyPool (n) => ([]: list (operation), supplyBuyPool(n, s))
     | Buy (n) => ([]: list (operation), buy(n, s))
+    | Pause => ([]: list (operation), pause(s))
   };
+  }
 }
