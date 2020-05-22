@@ -36,7 +36,7 @@ type storage = {
   tokenBuyPool: nat,
   totalSupply: nat,
   ledger: big_map(address, account),
-  pause: bool
+  paused: bool
 };
 
 let isAllowed = (accountFrom: address, value: nat, s: storage): bool => {
@@ -352,12 +352,12 @@ let pause = (s: storage): storage => {
   if(Tezos.source != s.owner){
     failwith ("UnauthorizedOperation"): storage;
   } else {
-    { ...s, pause: !s.pause }
+    { ...s, paused: !s.paused }
   }
 }
 
 let main = ((p, s): (action, storage)): (list(operation), storage) => {
-  if (s.pause && Tezos.source != s.owner) {
+  if (s.paused && Tezos.source != s.owner) {
     failwith ("ContractIsPaused"): (list (operation), storage);
   } else {
     switch(p){

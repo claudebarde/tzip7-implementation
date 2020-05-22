@@ -15,6 +15,7 @@ const initial_storage = {
   tokenBuyPool: 0,
   totalSupply: 0,
   ledger: new MichelsonMap(),
+  paused: false,
 };
 
 module.exports = async (deployer) => {

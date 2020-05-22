@@ -377,7 +377,7 @@ contract("tzip7 contract", (accounts) => {
 
     storage = await tzip7_instance.storage();
 
-    assert.isTrue(storage.pause);
+    assert.isTrue(storage.paused);
 
     // switches signer to Bob
     await signerFactory(bob.sk);
@@ -402,6 +402,6 @@ contract("tzip7 contract", (accounts) => {
 
     storage = await tzip7_instance.storage();
 
-    assert.isFalse(storage.pause);
+    assert.isFalse(storage.paused);
   });
 });
