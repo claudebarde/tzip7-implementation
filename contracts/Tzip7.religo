@@ -16,6 +16,7 @@ type action =
   | Buy (nat)
   | Approve ((address, nat))
   | RemoveApproval (address)
+  | AddExtra ((string, string))
   | GetAllowance (allowance_params)
   | GetBalance (balance_params)
   | GetTotalSupply (contract(nat))
@@ -298,6 +299,19 @@ let buy = (tokenAmount: nat, s: storage): storage => {
   }
 }
 
+// Add extra information about the token
+// Preconditions:
+// Only available to admin
+// Postconditions:
+// Extras map in metadata is updated
+let addExtra = (key: string, value: string, s: storage): storage => {
+  if(Tezos.source != s.owner) {
+    failwith ("UnauthorizedOperation"): storage;
+  } else {
+   {...s, metadata: {...s.metadata, extras: Map.update(key, Some (value), s.metadata.extras)}}
+  }
+}
+
 // View function that forwards the allowance nat of spender in the name of owner to a contract
 // Preconditions:
 //  None
@@ -372,6 +386,7 @@ let main = ((p, s): (action, storage)): (list(operation), storage) => {
     | SetBuyPrice (n) => ([]: list (operation), setBuyPrice(n, s))
     | SupplyBuyPool (n) => ([]: list (operation), supplyBuyPool(n, s))
     | Buy (n) => ([]: list (operation), buy(n, s))
+    | AddExtra (n) => ([]: list (operation), addExtra(n[0], n[1], s))
     | Pause => ([]: list (operation), pause(s))
   };
   }
